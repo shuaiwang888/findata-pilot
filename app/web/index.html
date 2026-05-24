@@ -1,0 +1,1024 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>FinDataPilot</title>
+  <style>
+    :root {
+      --bg: #f4f6f9;
+      --panel: #ffffff;
+      --panel-2: #f8fafc;
+      --line: #dbe2ea;
+      --text: #172033;
+      --muted: #5c667a;
+      --accent: #2457ff;
+      --accent-2: #1839a8;
+      --success: #1b7f4b;
+      --danger: #b42318;
+      --shadow: 0 10px 24px rgba(13, 23, 36, 0.08);
+      --radius: 12px;
+      --radius-sm: 8px;
+      --input: #fff;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: var(--text); background: var(--bg); }
+    body { overflow: hidden; }
+    a { color: inherit; text-decoration: none; }
+    button, input, textarea { font: inherit; }
+    .app { height: 100vh; display: grid; grid-template-columns: 280px 1fr 340px; gap: 16px; padding: 16px; }
+    .sidebar, .chat, .inspector, .login-card, .panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); }
+    .sidebar, .inspector { display: flex; flex-direction: column; min-height: 0; }
+    .brand { padding: 18px 18px 12px; border-bottom: 1px solid var(--line); }
+    .brand h1 { margin: 0; font-size: 18px; }
+    .brand p { margin: 6px 0 0; color: var(--muted); font-size: 12px; }
+    .sidebar-section { padding: 14px 18px; border-bottom: 1px solid var(--line); }
+    .sidebar-section h3, .panel h3 { margin: 0 0 10px; font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+    .sidebar-section .section-row { display: flex; gap: 10px; align-items: center; }
+    .session-list { display: flex; flex-direction: column; gap: 8px; overflow: auto; padding: 0 18px 18px; }
+    .session-item { border: 1px solid var(--line); border-radius: 10px; padding: 12px; background: var(--panel-2); cursor: pointer; }
+    .session-item.active { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(36,87,255,0.08); }
+    .session-item .title { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+    .session-item .meta { font-size: 12px; color: var(--muted); }
+    .chat { display: grid; grid-template-rows: auto 1fr auto; min-height: 0; }
+    .chat-header { display: flex; justify-content: space-between; align-items: center; padding: 18px 18px 14px; border-bottom: 1px solid var(--line); }
+    .chat-header .status { font-size: 12px; color: var(--muted); }
+    .chat-log { overflow: auto; padding: 18px; display: flex; flex-direction: column; gap: 12px; background: linear-gradient(180deg, #fbfcfe 0%, #f7f9fc 100%); }
+    .bubble { max-width: 82%; padding: 12px 14px; border-radius: 14px; border: 1px solid var(--line); background: #fff; line-height: 1.55; font-size: 14px; white-space: pre-wrap; word-break: break-word; }
+    .bubble.user { align-self: flex-end; background: #eef4ff; border-color: #d7e2ff; }
+    .bubble.agent { align-self: flex-start; }
+    .bubble.system { align-self: center; max-width: 95%; background: #f4f7fb; color: var(--muted); font-size: 12px; }
+    .result-card { max-width: 92%; align-self: flex-start; border: 1px solid var(--line); border-radius: 14px; background: #fff; overflow: hidden; }
+    .result-card .result-head { padding: 12px 14px; background: #f6f8fb; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+    .result-card .result-title { font-size: 13px; font-weight: 600; }
+    .result-card .result-sub { font-size: 12px; color: var(--muted); }
+    .result-card .result-body { padding: 12px 14px; max-height: 520px; overflow: auto; }
+    .result-card .result-summary { margin: 0 0 10px; font-size: 13px; line-height: 1.55; white-space: pre-wrap; max-height: 220px; overflow: auto; padding-right: 4px; }
+    .result-card .result-table { overflow: auto; border: 1px solid var(--line); border-radius: 10px; }
+    .think-card { max-width: 92%; align-self: flex-start; border: 1px dashed #b8c4d6; border-radius: 14px; background: #fbfcfe; }
+    .think-card .think-head { padding: 12px 14px; border-bottom: 1px dashed #d7dfeb; display: flex; justify-content: space-between; align-items: center; }
+    .think-card .think-body { padding: 12px 14px; color: var(--muted); font-size: 13px; line-height: 1.55; white-space: pre-wrap; }
+    .think-card.collapsed .think-body { display: none; }
+    .think-card.collapsed .think-head { border-bottom: 1px dashed #d7dfeb; }
+    .think-card.collapsed .tag { background: #f4f7fb; color: var(--muted); }
+    .think-head-actions { display: flex; align-items: center; gap: 8px; }
+    .icon-btn { border: 1px solid var(--line); background: #fff; color: var(--muted); min-width: 34px; height: 30px; border-radius: 8px; cursor: pointer; }
+    .icon-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .progress-track { height: 6px; margin: 0 14px 12px; border-radius: 999px; background: #e8edf5; overflow: hidden; }
+    .progress-fill { width: 0%; height: 100%; border-radius: inherit; background: var(--accent); transition: width 0.25s ease; }
+    .step-list { display: grid; gap: 8px; margin-top: 10px; white-space: normal; }
+    .step-item { display: grid; grid-template-columns: 18px 1fr; gap: 8px; align-items: start; color: var(--muted); }
+    .step-dot { width: 18px; height: 18px; border-radius: 50%; border: 1px solid #b8c4d6; background: #fff; color: var(--muted); display: inline-flex; align-items: center; justify-content: center; font-size: 11px; line-height: 1; }
+    .step-item.active { color: var(--text); font-weight: 600; }
+    .step-item.active .step-dot { border-color: var(--accent); color: var(--accent); box-shadow: 0 0 0 3px rgba(36,87,255,0.08); }
+    .step-item.done .step-dot { border-color: var(--success); background: #e8f6ef; color: var(--success); }
+    .assumption-list { margin-top: 10px; padding-top: 10px; border-top: 1px dashed #d7dfeb; color: var(--muted); white-space: normal; }
+    .plan-detail { margin-top: 10px; display: grid; gap: 6px; white-space: normal; }
+    .plan-detail-row { display: grid; grid-template-columns: 76px 1fr; gap: 10px; }
+    .plan-detail-row span:first-child { color: var(--muted); }
+    .stream-card { max-width: 92%; align-self: flex-start; border: 1px solid var(--line); border-radius: 14px; background: #fff; overflow: hidden; }
+    .stream-card .stream-head { padding: 12px 14px; background: #f6f8fb; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center; }
+    .stream-card .stream-body { padding: 12px 14px; white-space: pre-wrap; line-height: 1.6; font-size: 14px; max-height: 420px; overflow: auto; }
+    .visual-card { max-width: 96%; align-self: flex-start; border: 1px solid var(--line); border-radius: 14px; background: #fff; overflow: hidden; max-height: min(760px, 72vh); display: flex; flex-direction: column; }
+    .visual-head { padding: 14px 16px; background: #f6f8fb; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; }
+    .visual-title { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
+    .visual-headline { font-size: 13px; color: var(--muted); line-height: 1.45; }
+    .visual-body { padding: 14px 16px; display: grid; gap: 14px; overflow-y: auto; min-height: 0; }
+    .stat-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+    .stat-item { border: 1px solid var(--line); border-radius: 8px; padding: 10px; background: #fbfcfe; min-width: 0; }
+    .stat-label { color: var(--muted); font-size: 12px; margin-bottom: 5px; }
+    .stat-value { font-weight: 700; font-size: 15px; word-break: break-word; }
+    .stat-hint { color: var(--muted); font-size: 11px; margin-top: 4px; }
+    .visual-section-title { font-size: 13px; font-weight: 700; margin-bottom: 8px; }
+    .insight-list, .method-list, .warning-list { margin: 0; padding-left: 18px; color: var(--text); line-height: 1.55; font-size: 13px; }
+    .warning-list { color: var(--muted); }
+    .visual-table { overflow: auto; border: 1px solid var(--line); border-radius: 10px; max-height: 520px; }
+    .composer { border-top: 1px solid var(--line); padding: 14px; background: #fff; }
+    .composer textarea { width: 100%; min-height: 96px; resize: vertical; border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; background: var(--input); outline: none; }
+    .composer textarea:focus, .auth input:focus, .toolbar input:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(36,87,255,0.08); }
+    .composer-actions, .toolbar, .auth-actions { display: flex; gap: 10px; align-items: center; margin-top: 10px; }
+    .btn { border: 1px solid var(--line); background: #fff; color: var(--text); padding: 10px 14px; border-radius: 10px; cursor: pointer; }
+    .btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .btn.ghost { background: transparent; }
+    .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+    .inspector { padding: 0; }
+    .panel { margin: 0; border: 0; border-radius: 0; box-shadow: none; border-bottom: 1px solid var(--line); padding: 16px 18px; }
+    .panel:last-child { border-bottom: 0; overflow: auto; min-height: 0; }
+    .kv { display: grid; grid-template-columns: 1fr auto; gap: 6px 12px; font-size: 13px; }
+    .kv div:nth-child(odd) { color: var(--muted); }
+    .table-wrap { overflow: auto; border: 1px solid var(--line); border-radius: 10px; max-height: 520px; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    th, td { padding: 8px 10px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; white-space: nowrap; }
+    th { background: #f6f8fb; position: sticky; top: 0; }
+    .login-overlay { position: fixed; inset: 0; background: rgba(9, 14, 26, 0.55); display: none; align-items: center; justify-content: center; padding: 20px; }
+    .login-overlay.show { display: flex; }
+    .login-card { width: min(420px, 100%); padding: 24px; }
+    .login-card h2 { margin: 0 0 8px; font-size: 22px; }
+    .login-card p { margin: 0 0 18px; color: var(--muted); font-size: 13px; }
+    .auth { display: grid; gap: 12px; }
+    .auth input { width: 100%; border: 1px solid var(--line); background: #fff; border-radius: 10px; padding: 12px 14px; }
+    .hidden { display: none !important; }
+    .tag { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 999px; background: #eef4ff; color: var(--accent-2); font-size: 12px; }
+    .placeholder { color: var(--muted); font-size: 13px; }
+    .toolbar input { flex: 1; min-width: 0; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+    .mini { font-size: 12px; color: var(--muted); }
+    @media (max-width: 1100px) {
+      body { overflow: auto; }
+      .app { grid-template-columns: 1fr; height: auto; min-height: 100vh; }
+      .sidebar, .inspector { min-height: 320px; }
+      .stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+  </style>
+</head>
+<body>
+  <div class="app hidden" id="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <h1>FinDataPilot</h1>
+        <p>Query2Data Financial Workbench</p>
+      </div>
+      <div class="sidebar-section">
+        <h3>Query Runs</h3>
+        <div class="mini" style="margin-bottom:8px;">后端落库的问句、结构化结果和大模型总结。</div>
+        <div class="toolbar">
+          <input id="historyFilter" placeholder="搜索取数记录..." />
+          <button class="btn" id="refreshHistory">刷新</button>
+          <button class="btn" id="clearHistoryBtn">清理</button>
+        </div>
+      </div>
+      <div class="session-list" id="sessionList"></div>
+    </aside>
+
+    <main class="chat">
+      <div class="chat-header">
+        <div>
+          <div style="font-weight:600;">对话工作台</div>
+          <div class="status" id="chatStatus">已登录</div>
+        </div>
+        <div class="toolbar">
+          <span class="tag" id="healthTag">检查中</span>
+          <button class="btn" id="newChatBtn">新建对话</button>
+          <button class="btn ghost" id="logoutBtn">退出</button>
+        </div>
+      </div>
+      <div class="chat-log" id="chatLog"></div>
+      <div class="composer">
+        <textarea id="queryInput" placeholder="例如：贵州茅台最新收盘价，或者 近5个交易日涨幅前10的A股有哪些"></textarea>
+        <div class="composer-actions">
+          <button class="btn primary" id="sendBtn">发送</button>
+          <button class="btn hidden" id="cancelBtn">取消</button>
+          <button class="btn" id="loadExampleBtn">填充示例</button>
+          <span class="mini" id="typingState"></span>
+        </div>
+      </div>
+    </main>
+
+    <aside class="inspector">
+      <section class="panel">
+        <h3>Run Info</h3>
+        <div class="kv" id="runInfo">
+          <div>状态</div><div>等待查询</div>
+          <div>来源</div><div>问财 query2data</div>
+          <div>Trace</div><div>-</div>
+        </div>
+      </section>
+      <section class="panel">
+        <h3>Preview</h3>
+        <div class="placeholder" id="previewHint">查询后会在这里展示表格预览。</div>
+        <div class="table-wrap hidden" id="previewWrap"></div>
+      </section>
+      <section class="panel">
+        <h3>Metrics</h3>
+        <div class="kv" id="metricsBox">
+          <div>Rows</div><div>-</div>
+          <div>Columns</div><div>-</div>
+          <div>CSV</div><div>-</div>
+          <div>Parquet</div><div>-</div>
+        </div>
+      </section>
+    </aside>
+  </div>
+
+  <div class="login-overlay show" id="loginOverlay">
+    <div class="login-card">
+      <h2>登录 FinDataPilot</h2>
+      <p>使用本地会话进入金融取数工作台。</p>
+      <div class="auth">
+        <input id="username" placeholder="用户名" autocomplete="username" />
+        <input id="password" placeholder="密码" type="password" autocomplete="current-password" />
+        <div class="auth-actions">
+          <button class="btn primary" id="loginBtn">登录</button>
+          <span class="mini">本地演示登录，不接第三方认证。</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const state = {
+      loggedIn: false,
+      sessions: [],
+      conversations: [],
+      currentConversationId: null,
+      currentRun: null,
+      currentAbortController: null,
+      currentPlanSteps: [],
+      currentPlan: null,
+    };
+    const STORAGE_CLEAN_VERSION = '2026-05-22-sidebar-history-cleanup-v1';
+
+    const el = (id) => document.getElementById(id);
+
+    function escapeHtml(text) {
+      return String(text)
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#39;');
+    }
+
+    function renderChat(messages) {
+      const log = el('chatLog');
+      log.innerHTML = messages.map((m) => `
+        <div class="bubble ${m.role}">
+          ${escapeHtml(m.content)}
+        </div>
+      `).join('');
+      log.scrollTop = log.scrollHeight;
+    }
+
+    function pushMessage(role, content) {
+      const log = el('chatLog');
+      const node = document.createElement('div');
+      node.className = `bubble ${role}`;
+      node.innerHTML = escapeHtml(content);
+      log.appendChild(node);
+      log.scrollTop = log.scrollHeight;
+    }
+
+    function createThinkCard(message) {
+      const log = el('chatLog');
+      let node = document.getElementById('thinkCard');
+      if (!node) {
+        node = document.createElement('div');
+        node.id = 'thinkCard';
+        node.className = 'think-card';
+        node.innerHTML = `
+          <div class="think-head">
+            <div>
+              <div class="result-title">执行规划</div>
+              <div class="result-sub" id="thinkCardSub">正在理解问题</div>
+            </div>
+            <div class="think-head-actions">
+              <button class="icon-btn hidden" id="toggleThinkBtn" title="展开规划详情" type="button">⌄</button>
+              <div class="tag" id="thinkCardTag">thinking</div>
+            </div>
+          </div>
+          <div class="progress-track"><div class="progress-fill" id="thinkProgressFill"></div></div>
+          <div class="think-body">
+            <div id="thinkCardBody"></div>
+            <div class="plan-detail hidden" id="planDetail"></div>
+            <div class="step-list" id="planSteps"></div>
+            <div class="assumption-list hidden" id="planAssumptions"></div>
+          </div>
+        `;
+        log.appendChild(node);
+        document.getElementById('toggleThinkBtn').addEventListener('click', toggleThinkCard);
+      }
+      if (message) el('thinkCardBody').textContent = message;
+      log.scrollTop = log.scrollHeight;
+      return node;
+    }
+
+    function updateThinkCard(message, data = {}) {
+      const node = createThinkCard(message || '');
+      if (message) el('thinkCardBody').textContent = message;
+      const progress = Number(data.progress || 0);
+      if (progress > 0) {
+        el('thinkProgressFill').style.width = `${Math.max(0, Math.min(100, progress))}%`;
+      }
+      const sub = document.getElementById('thinkCardSub');
+      const tag = document.getElementById('thinkCardTag');
+      if (sub) sub.textContent = stageLabel(data.stage || '');
+      if (tag) tag.textContent = data.stage || 'running';
+      if (Array.isArray(data.steps) && data.steps.length) state.currentPlanSteps = data.steps;
+      if (data.plan) state.currentPlan = data.plan;
+      if (state.currentPlanSteps.length) renderPlanSteps(state.currentPlanSteps, progress);
+      renderPlanDetail(state.currentPlan);
+      const assumptions = data.plan?.assumptions || data.assumptions || [];
+      renderAssumptions(assumptions);
+      node.classList.remove('hidden-think');
+      el('chatLog').scrollTop = el('chatLog').scrollHeight;
+    }
+
+    function collapseThinkCard() {
+      const node = document.getElementById('thinkCard');
+      if (node) {
+        node.classList.add('collapsed');
+        const sub = node.querySelector('.result-sub');
+        const tag = node.querySelector('.tag');
+        const fill = document.getElementById('thinkProgressFill');
+        const toggle = document.getElementById('toggleThinkBtn');
+        if (sub) sub.textContent = '规划已完成，已折叠';
+        if (tag) tag.textContent = 'done';
+        if (fill) fill.style.width = '100%';
+        if (toggle) {
+          toggle.classList.remove('hidden');
+          toggle.textContent = '⌄';
+          toggle.title = '展开规划详情';
+        }
+      }
+    }
+
+    function toggleThinkCard() {
+      const node = document.getElementById('thinkCard');
+      const toggle = document.getElementById('toggleThinkBtn');
+      if (!node || !toggle) return;
+      const isCollapsed = node.classList.toggle('collapsed');
+      toggle.textContent = isCollapsed ? '⌄' : '⌃';
+      toggle.title = isCollapsed ? '展开规划详情' : '收起规划详情';
+      const sub = node.querySelector('.result-sub');
+      if (sub) sub.textContent = isCollapsed ? '规划已完成，已折叠' : '规划详情已展开';
+      el('chatLog').scrollTop = el('chatLog').scrollHeight;
+    }
+
+    function stageLabel(stage) {
+      const labels = {
+        connected: '已连接服务',
+        understand: '正在理解问题',
+        planning: '正在生成规划',
+        planned: '规划完成',
+        query2data: '正在调用数据接口',
+        data_ready: '数据已返回',
+        summarizing: '正在生成总结',
+        done: '完成',
+      };
+      return labels[stage] || '正在处理';
+    }
+
+    function renderPlanSteps(steps, progress) {
+      const box = document.getElementById('planSteps');
+      if (!box) return;
+      const activeIndex = Math.min(steps.length - 1, Math.max(0, Math.floor((progress / 100) * steps.length)));
+      box.innerHTML = steps.map((step, index) => {
+        const cls = index < activeIndex ? 'done' : (index === activeIndex ? 'active' : '');
+        const dot = index < activeIndex ? '✓' : String(index + 1);
+        return `
+          <div class="step-item ${cls}">
+            <span class="step-dot">${dot}</span>
+            <span>${escapeHtml(step)}</span>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function renderAssumptions(assumptions) {
+      const box = document.getElementById('planAssumptions');
+      if (!box) return;
+      const clean = (assumptions || []).filter(Boolean);
+      if (!clean.length) {
+        box.classList.add('hidden');
+        box.innerHTML = '';
+        return;
+      }
+      box.classList.remove('hidden');
+      box.innerHTML = `默认假设：${clean.map(escapeHtml).join('；')}`;
+    }
+
+    function renderPlanDetail(plan) {
+      const box = document.getElementById('planDetail');
+      if (!box) return;
+      if (!plan) {
+        box.classList.add('hidden');
+        box.innerHTML = '';
+        return;
+      }
+      const rows = [
+        ['意图', plan.intent],
+        ['指标', (plan.metrics || []).join('、')],
+        ['时间', plan.time_range],
+        ['取数问句', plan.query],
+        ['取数策略', plan.query_strategy],
+        ['本地处理', (plan.post_process || []).join('；')],
+        ['校验', (plan.validation || []).join('；')],
+      ].filter(([, value]) => value);
+      if (!rows.length) {
+        box.classList.add('hidden');
+        box.innerHTML = '';
+        return;
+      }
+      box.classList.remove('hidden');
+      box.innerHTML = rows.map(([label, value]) => `
+        <div class="plan-detail-row">
+          <span>${escapeHtml(label)}</span>
+          <span>${escapeHtml(value)}</span>
+        </div>
+      `).join('');
+    }
+
+    function createSummaryStreamCard() {
+      const log = el('chatLog');
+      let node = document.getElementById('summaryStreamCard');
+      if (!node) {
+        node = document.createElement('div');
+        node.id = 'summaryStreamCard';
+        node.className = 'stream-card';
+        node.innerHTML = `
+          <div class="stream-head">
+            <div>
+              <div class="result-title">最终总结</div>
+              <div class="result-sub">基于接口返回数据生成中</div>
+            </div>
+            <div class="tag">streaming</div>
+          </div>
+          <div class="stream-body" id="summaryStreamBody"></div>
+        `;
+        log.appendChild(node);
+      }
+      log.scrollTop = log.scrollHeight;
+      return node;
+    }
+
+    function appendSummaryDelta(delta) {
+      createSummaryStreamCard();
+      const body = el('summaryStreamBody');
+      body.textContent += (body.textContent ? '\n' : '') + delta;
+      body.scrollTop = body.scrollHeight;
+      el('chatLog').scrollTop = el('chatLog').scrollHeight;
+    }
+
+    function finalizeSummaryCard(answer) {
+      createSummaryStreamCard();
+      const body = el('summaryStreamBody');
+      if (answer && body.textContent.trim() !== answer.trim()) {
+        body.textContent = answer;
+      }
+      const card = document.getElementById('summaryStreamCard');
+      if (card) {
+        const sub = card.querySelector('.result-sub');
+        const tag = card.querySelector('.tag');
+        if (sub) sub.textContent = '基于接口返回的结构化数据生成';
+        if (tag) tag.textContent = 'done';
+      }
+      body.scrollTop = body.scrollHeight;
+      el('chatLog').scrollTop = el('chatLog').scrollHeight;
+    }
+
+    function renderVisualSummary(summary, table = {}) {
+      if (!summary || typeof summary !== 'object') return;
+      const log = el('chatLog');
+      let node = document.getElementById('visualSummaryCard');
+      if (!node) {
+        node = document.createElement('div');
+        node.id = 'visualSummaryCard';
+        node.className = 'visual-card';
+        log.appendChild(node);
+      }
+      const columns = normalizeVisualColumns(summary, table);
+      const rows = Array.isArray(summary.result_rows) ? summary.result_rows : [];
+      node.innerHTML = `
+        <div class="visual-head">
+          <div>
+            <div class="visual-title">${escapeHtml(summary.title || '结构化结果')}</div>
+            <div class="visual-headline">${escapeHtml(summary.headline || '')}</div>
+          </div>
+          <span class="tag">${escapeHtml(summary.query_type || 'result')}</span>
+        </div>
+        <div class="visual-body">
+          ${renderVisualTable(columns, rows)}
+          ${renderStats(summary.stats || [])}
+          ${renderListSection('结果洞察', summary.insights || [], 'insight-list')}
+          ${renderListSection('处理方法', summary.method || [], 'method-list')}
+          ${renderListSection('注意事项', summary.warnings || [], 'warning-list')}
+        </div>
+      `;
+      log.scrollTop = log.scrollHeight;
+    }
+
+    function normalizeVisualColumns(summary, table = {}) {
+      const explicit = Array.isArray(summary.result_columns) ? summary.result_columns.filter(Boolean) : [];
+      if (explicit.length) return explicit.slice(0, 8);
+      const rows = Array.isArray(summary.result_rows) ? summary.result_rows : [];
+      if (rows[0]) return Object.keys(rows[0]).slice(0, 8);
+      return (table.columns || []).slice(0, 8);
+    }
+
+    function renderStats(stats) {
+      const clean = (stats || []).filter(Boolean).slice(0, 6);
+      if (!clean.length) return '';
+      return `
+        <div class="stat-grid">
+          ${clean.map((item) => `
+            <div class="stat-item">
+              <div class="stat-label">${escapeHtml(item.label || '指标')}</div>
+              <div class="stat-value">${escapeHtml(item.value ?? '')}</div>
+              ${item.hint ? `<div class="stat-hint">${escapeHtml(item.hint)}</div>` : ''}
+            </div>
+          `).join('')}
+        </div>
+      `;
+    }
+
+    function renderListSection(title, items, className) {
+      const clean = (items || []).filter(Boolean);
+      if (!clean.length) return '';
+      return `
+        <div>
+          <div class="visual-section-title">${escapeHtml(title)}</div>
+          <ul class="${className}">
+            ${clean.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}
+          </ul>
+        </div>
+      `;
+    }
+
+    function renderVisualTable(columns, rows) {
+      if (!columns.length || !rows.length) return '';
+      return `
+        <div>
+          <div class="visual-section-title">结构化结果</div>
+          <div class="visual-table">
+            <table>
+              <thead><tr>${columns.map((h) => `<th>${escapeHtml(h)}</th>`).join('')}</tr></thead>
+              <tbody>
+                ${rows.slice(0, 50).map((row) => `
+                  <tr>${columns.map((h) => `<td>${escapeHtml(row[h] ?? '')}</td>`).join('')}</tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      `;
+    }
+
+    function clearTransientStreamCards() {
+      const think = document.getElementById('thinkCard');
+      const summary = document.getElementById('summaryStreamCard');
+      const visual = document.getElementById('visualSummaryCard');
+      if (think) think.remove();
+      if (summary) summary.remove();
+      if (visual) visual.remove();
+    }
+
+    async function streamChat(query, signal) {
+      const response = await fetch('/chat/stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query, page: '1', limit: '100', save: true }),
+        signal,
+      });
+      if (response.status === 404) {
+        updateThinkCard('当前服务未启用流式接口，已自动切换为普通查询模式。');
+        const fallback = await fetch('/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query, page: '1', limit: '100', save: true }),
+          signal,
+        });
+        const text = await fallback.text();
+        let payload;
+        try {
+          payload = JSON.parse(text);
+        } catch (error) {
+          throw new Error(text || `HTTP ${fallback.status}`);
+        }
+        if (!fallback.ok) {
+          throw new Error(payload.warnings?.join('\n') || payload.answer || `HTTP ${fallback.status}`);
+        }
+        collapseThinkCard();
+        renderVisualSummary(payload.visual_summary, payload.table || {});
+        return payload;
+      }
+      if (!response.ok || !response.body) {
+        const text = await response.text();
+        throw new Error(text || `HTTP ${response.status}`);
+      }
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const blocks = buffer.split('\n\n');
+        buffer = blocks.pop() || '';
+        for (const block of blocks) {
+          const lines = block.split('\n');
+          let eventName = '';
+          let dataLine = '';
+          for (const line of lines) {
+            if (line.startsWith('event: ')) eventName = line.slice(7).trim();
+            if (line.startsWith('data: ')) dataLine += line.slice(6).trim();
+          }
+          if (!eventName || !dataLine) continue;
+          const eventData = JSON.parse(dataLine);
+          if (eventName === 'ping') {
+            el('typingState').textContent = stageLabel(eventData.stage);
+            updateThinkCard(eventData.message || '', eventData);
+          } else if (eventName === 'think') {
+            el('typingState').textContent = stageLabel(eventData.stage);
+            updateThinkCard(eventData.message || '', eventData);
+          } else if (eventName === 'plan') {
+            el('typingState').textContent = stageLabel(eventData.stage);
+            updateThinkCard(eventData.message || '', eventData);
+          } else if (eventName === 'tool') {
+            el('typingState').textContent = stageLabel(eventData.stage);
+            updateThinkCard(eventData.message || '', eventData);
+          } else if (eventName === 'summary') {
+            el('typingState').textContent = stageLabel(eventData.stage);
+            updateThinkCard(eventData.message || '', eventData);
+            collapseThinkCard();
+            createSummaryStreamCard();
+          } else if (eventName === 'summary_delta') {
+            appendSummaryDelta(eventData.delta || '');
+          } else if (eventName === 'status') {
+            el('typingState').textContent = stageLabel(eventData.stage);
+            updateThinkCard(eventData.message || '', eventData);
+          } else if (eventName === 'done') {
+            finalizeSummaryCard(eventData.answer || '');
+            renderVisualSummary(eventData.visual_summary, eventData.table || {});
+            return eventData;
+          } else if (eventName === 'error') {
+            throw new Error(eventData.message || eventData.answer || '流式执行失败');
+          }
+        }
+      }
+      return null;
+    }
+
+    function getCurrentConversation() {
+      return state.conversations.find((item) => item.id === state.currentConversationId) || null;
+    }
+
+    function persistConversations() {
+      localStorage.setItem('data-agent-conversations', JSON.stringify(state.conversations));
+      localStorage.setItem('data-agent-current-conversation', state.currentConversationId || '');
+    }
+
+    function loadConversations() {
+      if (localStorage.getItem('data-agent-storage-clean-version') !== STORAGE_CLEAN_VERSION) {
+        localStorage.removeItem('data-agent-conversations');
+        localStorage.removeItem('data-agent-current-conversation');
+        localStorage.setItem('data-agent-storage-clean-version', STORAGE_CLEAN_VERSION);
+      }
+      try {
+        state.conversations = JSON.parse(localStorage.getItem('data-agent-conversations') || '[]');
+      } catch (e) {
+        state.conversations = [];
+      }
+      state.currentConversationId = localStorage.getItem('data-agent-current-conversation') || null;
+      if (!state.currentConversationId || !state.conversations.some((item) => item.id === state.currentConversationId)) {
+        newConversation(false);
+      }
+    }
+
+    function renderConversations() {
+      const list = el('conversationList');
+      const filterInput = el('conversationFilter');
+      if (!list || !filterInput) return;
+      const filter = filterInput.value.trim().toLowerCase();
+      const filtered = state.conversations.filter((item) => {
+        const text = `${item.title || ''} ${item.lastQuery || ''}`.toLowerCase();
+        return !filter || text.includes(filter);
+      });
+      list.innerHTML = filtered.map((item) => `
+        <div class="session-item ${state.currentConversationId === item.id ? 'active' : ''}" data-conversation-id="${item.id}">
+          <div class="title">${escapeHtml(item.title || '新建对话')}</div>
+          <div class="meta">${escapeHtml(item.createdAt || '')} · ${item.messages?.length || 0} 条消息</div>
+        </div>
+      `).join('') || '<div class="placeholder" style="padding: 0 18px;">暂无会话</div>';
+      list.querySelectorAll('.session-item').forEach((node) => {
+        node.addEventListener('click', () => switchConversation(node.dataset.conversationId));
+      });
+    }
+
+    function renderHistory(items) {
+      const list = el('sessionList');
+      const filter = el('historyFilter').value.trim().toLowerCase();
+      const filtered = items.filter((item) => {
+        const text = `${item.query_text || ''} ${item.status_code ?? ''}`.toLowerCase();
+        return !filter || text.includes(filter);
+      });
+      list.innerHTML = filtered.map((item) => `
+        <div class="session-item ${state.currentRun && state.currentRun.id === item.id ? 'active' : ''}" data-id="${item.id}">
+          <div class="title">${escapeHtml(item.query_text || '未命名查询')}</div>
+          <div class="meta">#${item.id} · ${item.answer_text ? 'LLM' : 'data only'} · ${item.status_code ?? '-'} · ${item.created_at ?? ''}</div>
+        </div>
+      `).join('') || '<div class="placeholder" style="padding: 0 18px;">暂无历史记录</div>';
+      list.querySelectorAll('.session-item').forEach((node) => {
+        node.addEventListener('click', () => loadRun(node.dataset.id));
+      });
+    }
+
+    function renderCurrentConversation() {
+      const conversation = getCurrentConversation();
+      if (!conversation) return;
+      renderChat(conversation.messages || []);
+      el('chatStatus').textContent = `会话：${conversation.title || '新建对话'}`;
+    }
+
+    function newConversation(silent = true) {
+      const id = `conv_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      const conversation = {
+        id,
+        title: '新建对话',
+        createdAt: new Date().toLocaleString(),
+        lastQuery: '',
+        messages: [
+          { role: 'system', content: '欢迎进入 FinDataPilot 工作台。' }
+        ],
+      };
+      state.conversations.unshift(conversation);
+      state.currentConversationId = id;
+      persistConversations();
+      renderConversations();
+      renderCurrentConversation();
+      if (!silent) {
+        el('runInfo').innerHTML = `
+          <div>状态</div><div>等待查询</div>
+          <div>来源</div><div>问财 query2data</div>
+          <div>Trace</div><div>-</div>
+          <div>任务</div><div>新建对话</div>
+        `;
+        el('metricsBox').innerHTML = `
+          <div>Rows</div><div>-</div>
+          <div>Columns</div><div>-</div>
+          <div>CSV</div><div>-</div>
+          <div>Parquet</div><div>-</div>
+        `;
+        el('previewHint').classList.remove('hidden');
+        el('previewWrap').classList.add('hidden');
+        el('previewHint').textContent = '新会话已创建，可以开始新的查询。';
+      }
+    }
+
+    function switchConversation(id) {
+      state.currentConversationId = id;
+      persistConversations();
+      renderConversations();
+      renderCurrentConversation();
+    }
+
+    function renderRun(run) {
+      clearTransientStreamCards();
+      state.currentRun = run;
+      const runStatus = run.source === 'planner' ? '需要补充' : (run.status_code === 0 ? '成功' : '失败');
+      el('runInfo').innerHTML = `
+        <div>状态</div><div>${runStatus}</div>
+        <div>来源</div><div>${escapeHtml(run.source || 'iwencai_query2data')}</div>
+        <div>Trace</div><div>${escapeHtml(run.trace_id || '-')}</div>
+        <div>任务</div><div>${escapeHtml(run.query_text || '-')}</div>
+      `;
+      el('metricsBox').innerHTML = `
+        <div>Rows</div><div>${run.row_count ?? 0}</div>
+        <div>Columns</div><div>${(run.columns || []).length}</div>
+        <div>CSV</div><div>${run.csv_path ? 'yes' : '-'}</div>
+        <div>Parquet</div><div>${run.parquet_path ? 'yes' : '-'}</div>
+      `;
+      const previewWrap = el('previewWrap');
+      const previewHint = el('previewHint');
+      const rows = run.rows || [];
+      const firstRow = rows[0] ? rows[0].row_json : null;
+      const headers = firstRow ? Object.keys(firstRow) : [];
+      if (firstRow) {
+        previewHint.classList.add('hidden');
+        previewWrap.classList.remove('hidden');
+        previewWrap.innerHTML = `
+          <table>
+            <thead><tr>${headers.map((h) => `<th>${escapeHtml(h)}</th>`).join('')}</tr></thead>
+            <tbody>
+              ${rows.slice(0, 50).map((row) => `
+                <tr>${headers.map((h) => `<td>${escapeHtml(row.row_json[h] ?? '')}</td>`).join('')}</tr>
+              `).join('')}
+            </tbody>
+          </table>
+        `;
+      } else {
+        previewHint.classList.remove('hidden');
+        previewWrap.classList.add('hidden');
+        previewHint.textContent = '没有可预览的数据。';
+      }
+      el('chatLog').innerHTML = '';
+      pushMessage('system', `已载入记录 #${run.id}`);
+      pushMessage('user', run.query_text || '');
+      if (run.error_message) {
+        pushMessage('agent', run.error_message);
+      } else if (run.answer_text) {
+        finalizeSummaryCard(run.answer_text);
+        const historyTable = buildHistoryTablePayload(run);
+        renderVisualSummary(run.visual_summary_json, historyTable);
+      } else {
+        pushMessage('agent', '这条历史记录没有保存大模型总结。请重新执行该问句以生成总结和可视化结果。');
+      }
+      el('chatStatus').textContent = `查看历史 #${run.id}`;
+    }
+
+    function buildHistoryTablePayload(run) {
+      const rows = (run.rows || []).map((row) => row.row_json || {});
+      const first = rows[0] || {};
+      const columns = Object.keys(first).length ? Object.keys(first) : (run.columns || []).map((col) => col.column_key).filter(Boolean);
+      return {
+        rows: run.row_count ?? rows.length,
+        columns,
+        preview: rows.slice(0, 12),
+        csv_path: run.csv_path,
+        parquet_path: run.parquet_path,
+      };
+    }
+
+    function renderRunInspectorFromResponse(data) {
+      const source = data.source || {};
+      const table = data.table || {};
+      const runStatus = source.type === 'planner' ? '需要补充' : (source.status_code === 0 ? '成功' : '失败');
+      state.currentRun = {
+        id: source.run_id,
+        trace_id: data.trace_id,
+        query_text: source.query,
+        status_code: source.status_code,
+      };
+      el('runInfo').innerHTML = `
+        <div>状态</div><div>${runStatus}</div>
+        <div>来源</div><div>${escapeHtml(source.type || 'iwencai_query2data')}</div>
+        <div>Trace</div><div>${escapeHtml(data.trace_id || '-')}</div>
+        <div>任务</div><div>${escapeHtml(source.query || '-')}</div>
+      `;
+      el('metricsBox').innerHTML = `
+        <div>Rows</div><div>${table.rows ?? 0}</div>
+        <div>Columns</div><div>${(table.columns || []).length}</div>
+        <div>CSV</div><div>${table.csv_path ? 'yes' : '-'}</div>
+        <div>Parquet</div><div>${table.parquet_path ? 'yes' : '-'}</div>
+      `;
+      const previewWrap = el('previewWrap');
+      const previewHint = el('previewHint');
+      const rows = table.preview || [];
+      const headers = rows[0] ? Object.keys(rows[0]) : (table.columns || []);
+      if (rows.length) {
+        previewHint.classList.add('hidden');
+        previewWrap.classList.remove('hidden');
+        previewWrap.innerHTML = `
+          <table>
+            <thead><tr>${headers.map((h) => `<th>${escapeHtml(h)}</th>`).join('')}</tr></thead>
+            <tbody>
+              ${rows.slice(0, 50).map((row) => `
+                <tr>${headers.map((h) => `<td>${escapeHtml(row[h] ?? '')}</td>`).join('')}</tr>
+              `).join('')}
+            </tbody>
+          </table>
+        `;
+      } else {
+        previewHint.classList.remove('hidden');
+        previewWrap.classList.add('hidden');
+        previewHint.textContent = '没有可预览的数据。';
+      }
+      el('chatStatus').textContent = source.run_id ? `当前查询 #${source.run_id}` : '当前查询';
+    }
+
+    async function loadHistory() {
+      const res = await fetch('/history?limit=30');
+      const data = await res.json();
+      state.sessions = data.items || [];
+      renderHistory(state.sessions);
+    }
+
+    async function clearQueryHistory() {
+      const ok = window.confirm('确认清理后端取数记录和导出的 CSV/Parquet 测试文件？本地对话不会被删除。');
+      if (!ok) return;
+      const res = await fetch('/history?delete_files=true', { method: 'DELETE' });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        pushMessage('system', `清理失败：${data.detail || res.status}`);
+        return;
+      }
+      state.sessions = [];
+      renderHistory(state.sessions);
+      state.currentRun = null;
+      el('runInfo').innerHTML = `
+        <div>状态</div><div>取数记录已清理</div>
+        <div>来源</div><div>问财 query2data</div>
+        <div>Trace</div><div>-</div>
+        <div>任务</div><div>等待查询</div>
+      `;
+      el('metricsBox').innerHTML = `
+        <div>Rows</div><div>-</div>
+        <div>Columns</div><div>-</div>
+        <div>CSV</div><div>-</div>
+        <div>Parquet</div><div>-</div>
+      `;
+      el('previewHint').classList.remove('hidden');
+      el('previewWrap').classList.add('hidden');
+      el('previewHint').textContent = `已清理 ${data.deleted?.runs ?? 0} 条取数记录和 ${data.deleted?.files ?? 0} 个导出文件。`;
+    }
+
+    async function loadRun(id) {
+      const res = await fetch(`/history/${id}`);
+      const data = await res.json();
+      if (data.item) renderRun(data.item);
+    }
+
+    async function healthCheck() {
+      const res = await fetch('/health');
+      const data = await res.json();
+      el('healthTag').textContent = data.ok ? 'Online' : 'Degraded';
+      el('healthTag').style.background = data.ok ? '#e8f6ef' : '#fff2f0';
+      el('healthTag').style.color = data.ok ? 'var(--success)' : 'var(--danger)';
+    }
+
+    async function sendQuery() {
+      const query = el('queryInput').value.trim();
+      if (!query) return;
+      if (state.currentAbortController) return;
+      const controller = new AbortController();
+      state.currentAbortController = controller;
+      state.currentPlanSteps = [];
+      state.currentPlan = null;
+      setComposerBusy(true);
+      el('typingState').textContent = '查询中...';
+      clearTransientStreamCards();
+      const conversation = getCurrentConversation();
+      try {
+        if (conversation) {
+          conversation.messages.push({ role: 'user', content: query });
+          conversation.lastQuery = query;
+          if (conversation.title === '新建对话') {
+            conversation.title = query.slice(0, 18);
+          }
+          persistConversations();
+          renderConversations();
+          renderCurrentConversation();
+        } else {
+          pushMessage('user', query);
+        }
+        el('queryInput').value = '';
+        const data = await streamChat(query, controller.signal);
+        if (!data) throw new Error('流式响应中断');
+        if (conversation) {
+          conversation.messages.push({ role: 'agent', content: data.answer || '已返回结果' });
+          persistConversations();
+          renderConversations();
+        } else {
+          finalizeSummaryCard(data.answer || '已返回结果');
+        }
+        renderRunInspectorFromResponse(data);
+        await loadHistory();
+      } catch (error) {
+        const aborted = error.name === 'AbortError';
+        const message = aborted ? '已取消本次查询。' : `请求失败：${error.message || error}`;
+        collapseThinkCard();
+        if (conversation) {
+          conversation.messages.push({ role: 'system', content: message });
+          persistConversations();
+          renderCurrentConversation();
+        } else {
+          pushMessage('system', message);
+        }
+      } finally {
+        el('typingState').textContent = '';
+        state.currentAbortController = null;
+        setComposerBusy(false);
+      }
+    }
+
+    function setComposerBusy(isBusy) {
+      el('sendBtn').disabled = isBusy;
+      el('loadExampleBtn').disabled = isBusy;
+      el('queryInput').disabled = isBusy;
+      el('cancelBtn').classList.toggle('hidden', !isBusy);
+    }
+
+    function login() {
+      state.loggedIn = true;
+      el('loginOverlay').classList.remove('show');
+      el('app').classList.remove('hidden');
+      el('chatStatus').textContent = '已登录，准备查询';
+      loadConversations();
+      loadHistory();
+      healthCheck();
+    }
+
+    el('loginBtn').addEventListener('click', login);
+    el('newChatBtn').addEventListener('click', () => newConversation(true));
+    el('logoutBtn').addEventListener('click', () => {
+      state.loggedIn = false;
+      el('loginOverlay').classList.add('show');
+      el('app').classList.add('hidden');
+    });
+    el('sendBtn').addEventListener('click', sendQuery);
+    el('cancelBtn').addEventListener('click', () => {
+      if (state.currentAbortController) state.currentAbortController.abort();
+    });
+    el('loadExampleBtn').addEventListener('click', () => {
+      el('queryInput').value = '贵州茅台近5个交易日收盘价并计算5日均线';
+    });
+    el('refreshHistory').addEventListener('click', loadHistory);
+    el('clearHistoryBtn').addEventListener('click', clearQueryHistory);
+    el('historyFilter').addEventListener('input', () => renderHistory(state.sessions));
+    el('queryInput').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendQuery();
+      }
+    });
+  </script>
+</body>
+</html>

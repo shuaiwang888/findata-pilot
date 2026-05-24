@@ -1,0 +1,37 @@
+.DS_Store
+
+# Local secrets
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Node / frontend
+node_modules/
+dist/
+build/
+app/web_dist/
+*.tsbuildinfo
+
+# Runtime outputs
+outputs/
+logs/
+docs/
+log.md
+*.log
+
+# Local sample/generated data
+*.parquet
+*.csv
+samples/
+
+# IDE
+.idea/
+.vscode/

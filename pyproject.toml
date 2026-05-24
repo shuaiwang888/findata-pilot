@@ -1,0 +1,10 @@
+[project]
+name = "findata-pilot"
+version = "0.1.0"
+description = "A local-first financial data agent for natural-language querying, structured data retrieval, analysis, and traceable reporting."
+requires-python = ">=3.10"
+readme = "README.md"
+
+[tool.findata-pilot]
+product_name = "FinDataPilot"
+database_name = "data_agent"
