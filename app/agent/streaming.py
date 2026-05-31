@@ -1,17 +1,31 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Iterator
-
+import logging
+import sys
 import time
+import asyncio
+from typing import Any
+
+from fastapi import Request
 
 from app.agent.executor import execute_query
 from app.agent.llm_assistant import build_interaction_plan, stream_summary_chunks
 from app.storage.repository import update_query_run_summary
 
+STREAM_TIMEOUT = 120
+
+_ABORT_PAYLOAD = {
+    "trace_id": None,
+    "answer": "查询已取消或连接已断开。",
+    "table": {"rows": 0, "columns": [], "preview": [], "csv_path": None, "parquet_path": None},
+    "source": {"type": "abort"},
+    "warnings": ["connection lost"],
+}
+
 
 def sse_event(event: str, data: dict[str, Any]) -> str:
-    return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+    return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False, default=str)}\n\n"
 
 
 def _plan_message(plan: dict[str, Any]) -> str:
@@ -32,9 +46,31 @@ def _plan_message(plan: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def stream_query(query: str, page: str = "1", limit: str = "100", save: bool = True) -> Iterator[str]:
+async def _should_exit(request: Request | None) -> bool:
+    if request is None:
+        return False
+    try:
+        return bool(await request.is_disconnected())
+    except Exception:
+        return False
+
+
+def _terminal_event(event: str, data: dict[str, Any]) -> str | None:
+    try:
+        return sse_event(event, data)
+    except Exception as exc:
+        logging.error("Failed to send terminal SSE event", exc_info=exc)
+        return None
+
+
+async def stream_query(query: str, page: str = "1", limit: str = "100", save: bool = True, request: Request | None = None):
+    start_time = time.time()
+    terminal_sent = False
     try:
         yield sse_event("ping", {"message": "connected", "stage": "connected", "progress": 3})
+        if await _should_exit(request):
+            return
+
         yield sse_event(
             "think",
             {
@@ -44,6 +80,7 @@ def stream_query(query: str, page: str = "1", limit: str = "100", save: bool = T
                 "visible": True,
             },
         )
+
         yield sse_event(
             "think",
             {
@@ -53,7 +90,17 @@ def stream_query(query: str, page: str = "1", limit: str = "100", save: bool = T
                 "visible": True,
             },
         )
+
+        if await _should_exit(request):
+            yield _terminal_event("done", _ABORT_PAYLOAD)
+            return
+
         plan = build_interaction_plan(query)
+
+        if await _should_exit(request):
+            yield _terminal_event("done", _ABORT_PAYLOAD)
+            return
+
         yield sse_event(
             "plan",
             {
@@ -65,15 +112,15 @@ def stream_query(query: str, page: str = "1", limit: str = "100", save: bool = T
                 "visible": True,
             },
         )
+
         if plan.get("need_clarification"):
-            payload = {
+            yield _terminal_event("done", {
                 "trace_id": None,
                 "answer": plan.get("clarification") or "请补充更明确的查询条件。",
                 "table": {"rows": 0, "columns": [], "preview": [], "csv_path": None, "parquet_path": None},
                 "source": {"type": "planner", "query": query, "task_type": "need_clarification", "llm_plan": plan},
                 "warnings": [],
-            }
-            yield sse_event("done", payload)
+            })
             return
 
         yield sse_event(
@@ -85,9 +132,23 @@ def stream_query(query: str, page: str = "1", limit: str = "100", save: bool = T
                 "progress": 48,
             },
         )
+
+        if await _should_exit(request):
+            yield _terminal_event("done", _ABORT_PAYLOAD)
+            return
+
+        if time.time() - start_time > STREAM_TIMEOUT:
+            yield _terminal_event("error", {"message": "查询超时，请缩小查询范围后重试。"})
+            return
+
         result = execute_query(query=query, page=page, limit=limit, save=save, llm_plan=plan, summarize=False)
         table = result.payload.get("table") or {}
         source = result.payload.get("source") or {}
+
+        if await _should_exit(request):
+            yield _terminal_event("done", _ABORT_PAYLOAD)
+            return
+
         yield sse_event(
             "tool",
             {
@@ -98,6 +159,7 @@ def stream_query(query: str, page: str = "1", limit: str = "100", save: bool = T
                 "table": {"rows": table.get("rows", 0), "columns": table.get("columns") or []},
             },
         )
+
         yield sse_event(
             "summary",
             {
@@ -107,6 +169,11 @@ def stream_query(query: str, page: str = "1", limit: str = "100", save: bool = T
                 "hide_think": True,
             },
         )
+
+        if await _should_exit(request):
+            yield _terminal_event("done", _ABORT_PAYLOAD)
+            return
+
         summary = stream_summary_chunks(
             user_query=query,
             plan=plan,
@@ -115,8 +182,12 @@ def stream_query(query: str, page: str = "1", limit: str = "100", save: bool = T
             warnings=result.payload.get("warnings") or [],
         )
         for chunk in summary.chunks:
+            if await _should_exit(request):
+                yield _terminal_event("done", _ABORT_PAYLOAD)
+                return
             yield sse_event("summary_delta", {"delta": chunk, "stage": "summarizing", "progress": 90})
-            time.sleep(0.05)
+            await asyncio.sleep(0.05)
+
         result.payload["answer"] = summary.answer
         result.payload["warnings"] = summary.warnings
         result.payload["visual_summary"] = summary.visual_summary
@@ -127,13 +198,22 @@ def stream_query(query: str, page: str = "1", limit: str = "100", save: bool = T
                 update_query_run_summary(run_id, summary.answer, summary.visual_summary)
             except Exception as exc:
                 result.payload["warnings"] = [*result.payload.get("warnings", []), f"MySQL summary persistence failed: {exc}"]
+
+        terminal_sent = True
         yield sse_event("status", {"message": "完成。", "stage": "done", "progress": 100})
         yield sse_event("done", result.payload)
+    except GeneratorExit:
+        if not terminal_sent:
+            logging.info("Stream generator closed before terminal event (client likely disconnected)")
+        raise
     except Exception as exc:
-        yield sse_event(
-            "error",
-            {
-                "message": f"流式执行失败：{exc}",
-                "answer": "请求执行失败，请稍后重试或使用普通查询接口。",
-            },
-        )
+        logging.error("Stream query failed", exc_info=exc)
+        print(f"[streaming error] {exc}", file=sys.stderr)
+        if not terminal_sent:
+            yield _terminal_event(
+                "error",
+                {
+                    "message": "请求执行失败，请稍后重试。",
+                    "answer": "请求执行失败，请稍后重试或使用普通查询接口。",
+                },
+            )

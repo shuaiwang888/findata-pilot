@@ -213,7 +213,11 @@ function sourceValue(label: string, value: unknown) {
 }
 
 function StockCharts({ query, queryType, columns, rows }: { query: string; queryType: string; columns: string[]; rows: Record<string, JsonValue>[] }) {
-  const charts = useMemo(() => buildStockCharts(query, queryType, columns, rows), [query, queryType, columns, rows]);
+  const charts = useMemo(
+    () => buildStockCharts(query, queryType, columns, rows),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [query, queryType, columns.join(','), rows.length]
+  );
   if (!charts.length) return null;
   return (
     <div className="chart-section">

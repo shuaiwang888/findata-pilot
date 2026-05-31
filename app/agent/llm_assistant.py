@@ -216,7 +216,7 @@ def _normalize_plan(plan: dict[str, Any], user_query: str) -> dict[str, Any]:
     normalized["need_clarification"] = bool(normalized.get("need_clarification"))
     if normalized["task_type"] == "need_clarification":
         normalized["need_clarification"] = True
-    if normalized["need_clarification"] and _looks_actionable_query(user_query):
+    if normalized["need_clarification"] and looks_actionable_financial_query(user_query):
         normalized["task_type"] = fallback["task_type"]
         normalized["need_clarification"] = False
         normalized["clarification"] = ""
@@ -226,42 +226,17 @@ def _normalize_plan(plan: dict[str, Any], user_query: str) -> dict[str, Any]:
     return normalized
 
 
-def _looks_actionable_query(query: str) -> bool:
+def looks_actionable_financial_query(query: str) -> bool:
     normalized = query.strip().lower()
     if not normalized:
         return False
     object_keywords = (
-        "自选股",
-        "持仓",
-        "股票",
-        "基金",
-        "指数",
-        "etf",
-        "a股",
-        "港股",
-        "美股",
-        "板块",
-        "行业",
-        "概念",
-        "市场",
+        "自选股", "持仓", "股票", "基金", "指数", "etf", "a股", "港股", "美股",
+        "板块", "行业", "概念", "市场",
     )
     metric_keywords = (
-        "涨跌幅",
-        "涨幅",
-        "跌幅",
-        "行情",
-        "收盘价",
-        "最新价",
-        "成交量",
-        "成交额",
-        "市值",
-        "pe",
-        "净利润",
-        "roe",
-        "表现",
-        "情况",
-        "排名",
-        "走势",
+        "涨跌幅", "涨幅", "跌幅", "行情", "收盘价", "最新价", "成交量", "成交额",
+        "市值", "pe", "净利润", "roe", "表现", "情况", "排名", "走势",
     )
     return any(word in normalized for word in object_keywords) and any(word in normalized for word in metric_keywords)
 

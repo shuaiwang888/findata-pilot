@@ -210,7 +210,6 @@ Runtime-generated directories are ignored:
 - `web/node_modules/`
 - `samples/`
 - `docs/`
-- `log.md`
 
 ## Security Notes
 

@@ -5,15 +5,16 @@ from dataclasses import dataclass
 from typing import Any
 
 from app.agent.analysis import analyze_dataframe
-from app.agent.llm_assistant import build_interaction_plan, build_local_visual_summary, summarize_result
+from app.agent.llm_assistant import build_interaction_plan, build_local_visual_summary, looks_actionable_financial_query, summarize_result
 from app.agent.planner import plan_query
 from app.storage.repository import save_failed_query_run, save_query_run, update_query_run_summary
 from app.tools.query2data import QUERY2DATA, Query2DataError
 from app.utils.env import load_env
 from app.utils.dataframe import dataframe_preview, save_dataframe
 
-
 load_env()
+
+MAX_LIMIT = 500
 
 
 @dataclass
@@ -31,9 +32,23 @@ def execute_query(
     summarize: bool = True,
 ) -> ExecutionResult:
     warnings: list[str] = []
+    try:
+        page_int = max(1, int(page))
+    except (TypeError, ValueError):
+        page_int = 1
+        warnings.append("Invalid page value; defaulted to 1.")
+    try:
+        limit_int = min(max(1, int(limit)), MAX_LIMIT)
+    except (TypeError, ValueError):
+        limit_int = 100
+        warnings.append("Invalid limit value; defaulted to 100.")
+    page = str(page_int)
+    limit = str(limit_int)
+
     plan = plan_query(query)
     llm_plan = llm_plan or build_interaction_plan(query)
-    if llm_plan.get("need_clarification") and not _looks_actionable_financial_query(query):
+
+    if llm_plan.get("need_clarification") and not looks_actionable_financial_query(query):
         clarification = llm_plan.get("clarification") or "请补充更明确的查询条件。"
         return ExecutionResult(
             payload={
@@ -45,27 +60,17 @@ def execute_query(
             },
             status_code=400,
         )
-    if llm_plan.get("need_clarification") and _looks_actionable_financial_query(query):
-        llm_plan = {**llm_plan, "task_type": "direct_query", "need_clarification": False, "clarification": "", "query": query}
-    if plan.need_clarification:
-        return ExecutionResult(
-            payload={
-                "trace_id": None,
-                "answer": plan.clarification,
-                "table": {"rows": 0, "columns": [], "preview": [], "csv_path": None, "parquet_path": None},
-                "source": {"type": "planner", "query": query, "task_type": plan.task_type, "llm_plan": llm_plan},
-                "warnings": [],
-            },
-            status_code=400,
-        )
 
-    execution_query = str(llm_plan.get("query") or query).strip() or query
+    if llm_plan.get("need_clarification") and looks_actionable_financial_query(query):
+        llm_plan = {**llm_plan, "task_type": "direct_query", "need_clarification": False, "clarification": "", "query": query}
+
     planned_analysis = llm_plan.get("analysis")
     if planned_analysis and plan.task_type == "direct_query":
         plan.task_type = "query_then_analyze"
         plan.analysis = str(planned_analysis)
 
     try:
+        execution_query = str(llm_plan.get("query") or query).strip() or query
         df = QUERY2DATA(query=execution_query, page=page, limit=limit)
     except Query2DataError as exc:
         response = exc.response or {}
@@ -181,12 +186,3 @@ def execute_query(
         "warnings": warnings,
     }
     return ExecutionResult(payload=payload)
-
-
-def _looks_actionable_financial_query(query: str) -> bool:
-    normalized = query.strip().lower()
-    if not normalized:
-        return False
-    object_keywords = ("自选股", "持仓", "股票", "基金", "指数", "etf", "a股", "港股", "美股", "板块", "行业", "概念")
-    metric_keywords = ("涨跌幅", "涨幅", "跌幅", "行情", "收盘价", "最新价", "成交量", "成交额", "表现", "情况", "排名", "走势")
-    return any(word in normalized for word in object_keywords) and any(word in normalized for word in metric_keywords)

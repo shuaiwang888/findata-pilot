@@ -17,8 +17,11 @@ def clean_json_value(value: Any) -> Any:
     return value
 
 
-def dataframe_preview(df: pd.DataFrame, limit: int = 10) -> list[dict[str, Any]]:
-    preview = df.head(limit).replace({pd.NA: None}).to_dict(orient="records")
+def dataframe_preview(df: pd.DataFrame, limit: int = 10, max_columns: int = 25) -> list[dict[str, Any]]:
+    preview_df = df.head(limit)
+    if len(preview_df.columns) > max_columns:
+        preview_df = preview_df.iloc[:, :max_columns]
+    preview = preview_df.replace({pd.NA: None}).to_dict(orient="records")
     return clean_json_value(preview)
 
 

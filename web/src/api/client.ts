@@ -65,7 +65,7 @@ export async function streamChat(
     }
   }
 
-  throw new Error('stream ended before done');
+  return sendChat(query);
 }
 
 function parseSseBlock(block: string): StreamEvent | null {
@@ -73,7 +73,10 @@ function parseSseBlock(block: string): StreamEvent | null {
   let data = '';
   for (const line of block.split('\n')) {
     if (line.startsWith('event: ')) event = line.slice(7).trim();
-    if (line.startsWith('data: ')) data += line.slice(6).trim();
+    if (line.startsWith('data: ')) {
+      if (data) data += '\n';
+      data += line.slice(6);
+    }
   }
   if (!event || !data) return null;
   return { event, data: JSON.parse(data) };

@@ -12,6 +12,6 @@ router = APIRouter()
 def get_file(filename: str):
     base = Path(os.environ.get("DATA_AGENT_OUTPUT_DIR", "outputs/tables")).resolve()
     target = (base / filename).resolve()
-    if base not in target.parents or not target.exists():
+    if base not in target.parents or not target.is_file():
         raise HTTPException(status_code=404, detail="File not found")
     return FileResponse(target)

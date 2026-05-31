@@ -19,6 +19,8 @@ dist/
 build/
 app/web_dist/
 *.tsbuildinfo
+web/vite.config.js
+web/vite.config.d.ts
 
 # Runtime outputs
 outputs/

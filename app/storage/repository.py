@@ -6,7 +6,9 @@ from typing import Any
 
 import pandas as pd
 
-from app.storage.mysql import get_connection
+from app.storage.mysql import pooled_connection
+
+_schema_ensured = False
 
 
 def _json(value: Any) -> str:
@@ -45,12 +47,10 @@ def _response_meta(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def ensure_summary_columns() -> None:
-    try:
-        conn = get_connection()
-    except ModuleNotFoundError as exc:
-        raise RuntimeError(str(exc)) from exc
-
-    with conn:
+    global _schema_ensured
+    if _schema_ensured:
+        return
+    with pooled_connection() as conn:
         try:
             with conn.cursor() as cursor:
                 cursor.execute(
@@ -71,6 +71,7 @@ def ensure_summary_columns() -> None:
         except Exception:
             conn.rollback()
             raise
+    _schema_ensured = True
 
 
 def save_failed_query_run(
@@ -84,12 +85,7 @@ def save_failed_query_run(
     request_json: dict[str, Any] | None = None,
     response_meta_json: dict[str, Any] | None = None,
 ) -> int | None:
-    try:
-        conn = get_connection()
-    except ModuleNotFoundError as exc:
-        raise RuntimeError(str(exc)) from exc
-
-    with conn:
+    with pooled_connection() as conn:
         try:
             with conn.cursor() as cursor:
                 cursor.execute(
@@ -124,13 +120,7 @@ def save_failed_query_run(
 
 
 def list_query_runs(limit: int = 20, offset: int = 0) -> list[dict[str, Any]]:
-    ensure_summary_columns()
-    try:
-        conn = get_connection()
-    except ModuleNotFoundError as exc:
-        raise RuntimeError(str(exc)) from exc
-
-    with conn:
+    with pooled_connection() as conn:
         with conn.cursor() as cursor:
             cursor.execute(
                 """
@@ -151,13 +141,7 @@ def list_query_runs(limit: int = 20, offset: int = 0) -> list[dict[str, Any]]:
 
 
 def get_query_run(run_id: int) -> dict[str, Any] | None:
-    ensure_summary_columns()
-    try:
-        conn = get_connection()
-    except ModuleNotFoundError as exc:
-        raise RuntimeError(str(exc)) from exc
-
-    with conn:
+    with pooled_connection() as conn:
         with conn.cursor() as cursor:
             cursor.execute(
                 """
@@ -207,12 +191,7 @@ def get_query_run(run_id: int) -> dict[str, Any] | None:
 
 
 def clear_query_runs() -> dict[str, int]:
-    try:
-        conn = get_connection()
-    except ModuleNotFoundError as exc:
-        raise RuntimeError(str(exc)) from exc
-
-    with conn:
+    with pooled_connection() as conn:
         try:
             with conn.cursor() as cursor:
                 cursor.execute("SELECT COUNT(*) AS count FROM agent_query_runs")
@@ -234,13 +213,7 @@ def clear_query_runs() -> dict[str, int]:
 def update_query_run_summary(run_id: int | None, answer: str, visual_summary: dict[str, Any] | None) -> None:
     if not run_id:
         return
-    try:
-        ensure_summary_columns()
-        conn = get_connection()
-    except ModuleNotFoundError as exc:
-        raise RuntimeError(str(exc)) from exc
-
-    with conn:
+    with pooled_connection() as conn:
         try:
             with conn.cursor() as cursor:
                 cursor.execute(
@@ -272,18 +245,12 @@ def save_query_run(
     parquet_path: str | None,
     error_message: str | None = None,
 ) -> int:
-    ensure_summary_columns()
     attrs = df.attrs
     payload = attrs.get("response_payload") or {}
     columns_schema = attrs.get("columns_schema") or []
     records = df.where(pd.notnull(df), None).to_dict(orient="records")
 
-    try:
-        conn = get_connection()
-    except ModuleNotFoundError as exc:
-        raise RuntimeError(str(exc)) from exc
-
-    with conn:
+    with pooled_connection() as conn:
         try:
             with conn.cursor() as cursor:
                 cursor.execute(
