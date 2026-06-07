@@ -25,9 +25,17 @@ web/vite.config.d.ts
 # Runtime outputs
 outputs/
 logs/
-docs/
 log.md
 *.log
+
+# docs/ holds README screenshots; allow docs/images/, ignore everything else
+# Use specific subpath patterns (not `docs/*` which doesn't recurse into
+# subdirectories and accidentally blocks all nested files).
+/docs/notes/
+/docs/drafts/
+/docs/*.md
+!/docs/images/
+/docs/*.tmp
 
 # Local sample/generated data
 *.parquet
