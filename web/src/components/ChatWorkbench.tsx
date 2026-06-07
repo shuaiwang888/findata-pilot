@@ -1,6 +1,8 @@
+import { useMemo } from 'react';
 import type { ReactNode } from 'react';
 import { Button, Collapse, Input, Progress, Space, Tag, Typography } from 'antd';
 import type { ChatResponse, QueryRunDetail, StreamEvent } from '../types/api';
+import { Typewriter } from './Typewriter';
 
 interface Props {
   query: string;
@@ -22,6 +24,12 @@ export function ChatWorkbench(props: Props) {
   const hasResultSource = Boolean(props.response || props.run);
   const hasConversation = Boolean(activeQuestion || props.loading || answer || hasResultSource);
   const traceItems = props.events.slice(-8);
+
+  // Build the streaming answer: concat all summary_delta chunks received so far.
+  // If the stream has finished, the final `answer` from the response wins.
+  const streamingAnswer = useMemo(() => buildStreamingAnswer(props.events), [props.events]);
+  const isStreamingSummary = props.loading && streamingAnswer.length > 0;
+  const displayAnswer = isStreamingSummary ? streamingAnswer : answer;
 
   return (
     <section className="chat-card">
@@ -82,12 +90,15 @@ export function ChatWorkbench(props: Props) {
           </div>
         ) : null}
 
-        {(answer || hasResultSource) ? (
+        {(displayAnswer || hasResultSource) ? (
           <div className="message-row assistant">
-            <div className="assistant-avatar">AI</div>
+            <div className="assistant-avatar">{isStreamingSummary ? '··' : 'AI'}</div>
             <div className="assistant-message result-message">
-              {answer && !hasResultSource ? (
-                <Typography.Paragraph className="summary-text">{answer}</Typography.Paragraph>
+              {displayAnswer && !hasResultSource ? (
+                <Typewriter
+                  text={displayAnswer}
+                  streaming={isStreamingSummary}
+                />
               ) : null}
               {hasResultSource ? props.children : null}
             </div>
@@ -129,4 +140,15 @@ function latestPlan(events: StreamEvent[]): { steps?: unknown[] } | null {
     if (plan && typeof plan === 'object' && !Array.isArray(plan)) return plan as { steps?: unknown[] };
   }
   return null;
+}
+
+function buildStreamingAnswer(events: StreamEvent[]): string {
+  let acc = '';
+  for (const event of events) {
+    if (event.event === 'summary_delta') {
+      const delta = event.data.delta;
+      if (typeof delta === 'string' && delta) acc += delta;
+    }
+  }
+  return acc;
 }

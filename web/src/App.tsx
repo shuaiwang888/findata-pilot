@@ -1,10 +1,14 @@
-import { useMemo, useRef, useState } from 'react';
-import { App as AntApp, Button, Layout, message, Typography } from 'antd';
+import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
+import { App as AntApp, Button, Layout, Skeleton, message, Typography } from 'antd';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { clearHistory, fetchHistory, fetchRun, streamChat } from './api/client';
 import { ChatWorkbench } from './components/ChatWorkbench';
 import { QueryRuns } from './components/QueryRuns';
-import { VisualSummary } from './components/VisualSummary';
+// VisualSummary pulls in ECharts + the heavier antd pieces (Table, Card).
+// Lazy-load it so the first paint only ships react + antd-shared + chat UI.
+const VisualSummary = lazy(() =>
+  import('./components/VisualSummary').then((m) => ({ default: m.VisualSummary }))
+);
 import type { ChatResponse, QueryRunDetail, StreamEvent } from './types/api';
 
 const { Sider, Content } = Layout;
@@ -15,9 +19,31 @@ export default function App() {
   const [activeRun, setActiveRun] = useState<QueryRunDetail | null>(null);
   const [response, setResponse] = useState<ChatResponse | null>(null);
   const [events, setEvents] = useState<StreamEvent[]>([]);
+  // Buffered stream events are flushed to React state at most once per frame,
+  // so a flood of summary_delta chunks doesn't trigger 30+ renders/sec on the
+  // whole chat tree.
+  const eventsBufferRef = useRef<StreamEvent[]>([]);
+  const flushRafRef = useRef<number | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const queryClient = useQueryClient();
   const [messageApi, contextHolder] = message.useMessage();
+
+  // Coalesce buffered events into a single setState per rAF tick.
+  function flushEventsSoon() {
+    if (flushRafRef.current != null) return;
+    flushRafRef.current = requestAnimationFrame(() => {
+      flushRafRef.current = null;
+      const buffered = eventsBufferRef.current;
+      if (buffered.length === 0) return;
+      eventsBufferRef.current = [];
+      setEvents((prev) => prev.concat(buffered));
+    });
+  }
+
+  // Cancel any pending flush on unmount.
+  useEffect(() => () => {
+    if (flushRafRef.current != null) cancelAnimationFrame(flushRafRef.current);
+  }, []);
 
   const historyQuery = useQuery({ queryKey: ['history'], queryFn: fetchHistory });
   const activeId = response?.source?.run_id || activeRun?.id;
@@ -26,10 +52,24 @@ export default function App() {
     mutationFn: async (value: string) => {
       abortRef.current = new AbortController();
       setEvents([]);
+      eventsBufferRef.current = [];
       setActiveRun(null);
       const result = await streamChat(
         value,
-        (event) => setEvents((items) => [...items, event]),
+        (event) => {
+          // Terminal events flush immediately so we never miss a `done`.
+          if (event.event === 'done' || event.event === 'error' || event.event === 'status') {
+            eventsBufferRef.current.push(event);
+            if (flushRafRef.current != null) cancelAnimationFrame(flushRafRef.current);
+            flushRafRef.current = null;
+            const buffered = eventsBufferRef.current;
+            eventsBufferRef.current = [];
+            setEvents((prev) => prev.concat(buffered));
+            return;
+          }
+          eventsBufferRef.current.push(event);
+          flushEventsSoon();
+        },
         abortRef.current.signal
       );
       return result;
@@ -109,7 +149,7 @@ export default function App() {
           <div className="topbar">
             <div>
               <Typography.Text strong className="topbar-title">FinDataPilot Workbench</Typography.Text>
-              <div className="topbar-subtitle">LLM Planning · Query2Data · Structured Insight</div>
+              <div className="topbar-subtitle">LLM Planning<span className="dot" />Query2Data<span className="dot" />Structured Insight</div>
             </div>
             <Button className="new-chat-btn" onClick={handleNewChat}>新建查询</Button>
           </div>
@@ -125,7 +165,15 @@ export default function App() {
                 events={events}
                 run={activeRun}
               >
-                <VisualSummary response={selectedVisualSource.response} run={selectedVisualSource.run} />
+                <Suspense
+                  fallback={
+                    <div className="visual-skeleton">
+                      <Skeleton active paragraph={{ rows: 4 }} />
+                    </div>
+                  }
+                >
+                  <VisualSummary response={selectedVisualSource.response} run={selectedVisualSource.run} />
+                </Suspense>
               </ChatWorkbench>
             </div>
           </Content>

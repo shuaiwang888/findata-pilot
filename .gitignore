@@ -37,3 +37,9 @@ samples/
 # IDE
 .idea/
 .vscode/
+
+# Claude Code local session cache
+.claude/
+
+# Local data samples / reference materials (never committed)
+data/

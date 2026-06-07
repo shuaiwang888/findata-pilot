@@ -14,6 +14,14 @@ export interface VisualStat {
   hint?: string;
 }
 
+export interface VisualChart {
+  type: 'bar' | 'line' | 'pie';
+  x: string;
+  y: string;
+  group?: string;
+  reason?: string;
+}
+
 export interface VisualSummary {
   title: string;
   query_type: string;
@@ -24,6 +32,11 @@ export interface VisualSummary {
   result_rows: Record<string, JsonValue>[];
   method: string[];
   warnings: string[];
+  criteria?: string[];
+  steps?: string[];
+  notes?: string[];
+  followups?: string[];
+  chart?: VisualChart | null;
 }
 
 export interface SourcePayload {
